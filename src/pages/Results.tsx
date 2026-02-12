@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Copy, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, Copy, Clock, Loader2, Play, Download } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 const Results = () => {
@@ -34,6 +34,33 @@ const Results = () => {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "Copied!", description: "Copied to clipboard." });
+  };
+
+  const parseTimestamp = (ts: string): number => {
+    const parts = ts.split(":").map(Number);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  };
+
+  const openClipOnYouTube = (startTs: string, endTs: string) => {
+    if (!video?.youtube_video_id) return;
+    const start = parseTimestamp(startTs);
+    const end = parseTimestamp(endTs);
+    window.open(
+      `https://www.youtube.com/embed/${video.youtube_video_id}?start=${start}&end=${end}&autoplay=1`,
+      "_blank"
+    );
+  };
+
+  const openClipDownloader = (startTs: string, endTs: string) => {
+    if (!video?.youtube_video_id) return;
+    const start = parseTimestamp(startTs);
+    const end = parseTimestamp(endTs);
+    window.open(
+      `https://www.y2mate.com/youtube/${video.youtube_video_id}`,
+      "_blank"
+    );
   };
 
   const copyAll = () => {
@@ -136,10 +163,26 @@ const Results = () => {
                       <p className="text-sm font-medium text-accent mb-0.5">Hook</p>
                       <p className="text-sm italic">"{s.hook_line}"</p>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-0.5">Why it works</p>
-                      <p className="text-sm">{s.description}</p>
-                    </div>
+                     <div>
+                       <p className="text-sm font-medium text-muted-foreground mb-0.5">Why it works</p>
+                       <p className="text-sm">{s.description}</p>
+                     </div>
+                     <div className="flex items-center gap-2 pt-2 border-t border-border">
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => openClipOnYouTube(s.start_timestamp, s.end_timestamp)}
+                       >
+                         <Play className="w-4 h-4 mr-1" /> Watch Clip
+                       </Button>
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => openClipDownloader(s.start_timestamp, s.end_timestamp)}
+                       >
+                         <Download className="w-4 h-4 mr-1" /> Download
+                       </Button>
+                     </div>
                   </CardContent>
                 </Card>
               ))}
