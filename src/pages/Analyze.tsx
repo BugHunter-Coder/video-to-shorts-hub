@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Upload, X } from "lucide-react";
 
 function extractVideoId(url: string): string | null {
   const patterns = [
@@ -27,8 +27,22 @@ const Analyze = () => {
   const navigate = useNavigate();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!user) { navigate("/auth"); return null; }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) {
+      const maxSize = 500 * 1024 * 1024; // 500MB
+      if (selected.size > maxSize) {
+        toast({ title: "File too large", description: "Maximum file size is 500MB.", variant: "destructive" });
+        return;
+      }
+      setFile(selected);
+    }
+  };
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +54,22 @@ const Analyze = () => {
 
     setLoading(true);
 
+    // Upload file if provided
+    let fileUrl: string | null = null;
+    if (file) {
+      const filePath = `${user.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("user-videos")
+        .upload(filePath, file);
+      if (uploadError) {
+        toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("user-videos").getPublicUrl(filePath);
+      fileUrl = urlData.publicUrl;
+    }
+
     // Create video record
     const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
     const { data: video, error: insertError } = await supabase
@@ -50,6 +80,7 @@ const Analyze = () => {
         youtube_video_id: videoId,
         thumbnail_url: thumbnailUrl,
         status: "processing",
+        file_url: fileUrl,
       })
       .select()
       .single();
@@ -110,6 +141,43 @@ const Analyze = () => {
                 required
                 disabled={loading}
               />
+
+              {/* File upload (optional) */}
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Optionally attach your video file for reference:</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  disabled={loading}
+                />
+                {file ? (
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+                    <Upload className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="truncate flex-1">{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={loading}
+                  >
+                    <Upload className="w-4 h-4 mr-2" /> Attach video file
+                  </Button>
+                )}
+              </div>
+
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (
                   <>
