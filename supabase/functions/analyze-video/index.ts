@@ -71,19 +71,6 @@ serve(async (req) => {
       console.error("Transcript fetch error:", e);
     }
 
-    if (!transcript || transcript.length < 50) {
-      // Update with video title from page if possible
-      await supabase.from("videos").update({
-        status: "failed",
-        error_message: "Could not fetch transcript. The video may not have captions enabled.",
-      }).eq("id", videoId);
-
-      return new Response(
-        JSON.stringify({ error: "Could not fetch video transcript. Ensure the video has captions." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Extract video title from page
     let videoTitle = "";
     try {
@@ -96,23 +83,15 @@ serve(async (req) => {
       await supabase.from("videos").update({ title: videoTitle }).eq("id", videoId);
     }
 
+    const hasTranscript = transcript && transcript.length >= 50;
+    console.log(hasTranscript ? "Transcript found, running AI analysis..." : "No transcript found, analyzing from title/metadata...");
+
     // AI Analysis
-    console.log("Running AI analysis...");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert short-form content strategist. Analyze the given video transcript and identify the 10 best moments to turn into short-form videos (TikTok, YouTube Shorts, Reels).
+    const systemPrompt = hasTranscript
+      ? `You are an expert short-form content strategist. Analyze the given video transcript and identify the 10 best moments to turn into short-form videos (TikTok, YouTube Shorts, Reels).
 
 For each moment, return:
 - short_number (1-10)
@@ -123,12 +102,37 @@ For each moment, return:
 - end_timestamp: format "M:SS"  
 - duration_seconds: estimated duration in seconds (15-60 range)
 
-Prioritize moments with: emotional peaks, surprising statements, actionable tips, humor, controversy, or "aha" moments.`,
-          },
-          {
-            role: "user",
-            content: `Here is the transcript of the video "${videoTitle}":\n\n${transcript.substring(0, 30000)}`,
-          },
+Prioritize moments with: emotional peaks, surprising statements, actionable tips, humor, controversy, or "aha" moments.`
+      : `You are an expert short-form content strategist. Based on the video title provided, suggest 10 creative short-form video ideas that could be extracted from this type of content (TikTok, YouTube Shorts, Reels).
+
+Since no transcript is available, use the title to infer the topic and suggest likely compelling moments/angles.
+
+For each moment, return:
+- short_number (1-10)
+- title: a catchy, platform-ready title (max 60 chars)
+- hook_line: the opening line that would stop someone from scrolling (1 sentence)
+- description: why this angle works as a short (2-3 sentences)
+- start_timestamp: format "0:00" (estimated)
+- end_timestamp: format "0:30" (estimated)
+- duration_seconds: estimated duration in seconds (15-60 range)
+
+Be creative and focus on angles that tend to go viral.`;
+
+    const userContent = hasTranscript
+      ? `Here is the transcript of the video "${videoTitle}":\n\n${transcript.substring(0, 30000)}`
+      : `Video title: "${videoTitle || "Unknown"}" (YouTube ID: ${youtubeVideoId}). No transcript/captions available — suggest 10 short-form video ideas based on the topic.`;
+
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
         ],
         tools: [
           {
