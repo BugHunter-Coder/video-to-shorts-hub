@@ -45,11 +45,11 @@ const Landing = () => {
             Powered by AI
           </span>
           <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6">
-            Turn any YouTube video into{" "}
+            Turn any video into{" "}
             <span className="text-primary">10 viral shorts</span>
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-            Paste a URL. Get 10 perfectly timed clips with catchy titles, hook lines, and descriptions — ready to post.
+            Upload your video. Get 10 perfectly timed clips with catchy titles, hook lines, and descriptions — then publish directly to YouTube.
           </p>
           <Button
             size="lg"

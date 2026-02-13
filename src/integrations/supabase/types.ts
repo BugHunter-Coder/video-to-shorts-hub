@@ -63,6 +63,7 @@ export type Database = {
       }
       videos: {
         Row: {
+          aspect_ratio: string | null
           created_at: string
           error_message: string | null
           file_url: string | null
@@ -76,6 +77,7 @@ export type Database = {
           youtube_video_id: string
         }
         Insert: {
+          aspect_ratio?: string | null
           created_at?: string
           error_message?: string | null
           file_url?: string | null
@@ -89,6 +91,7 @@ export type Database = {
           youtube_video_id: string
         }
         Update: {
+          aspect_ratio?: string | null
           created_at?: string
           error_message?: string | null
           file_url?: string | null
@@ -100,6 +103,42 @@ export type Database = {
           user_id?: string
           youtube_url?: string
           youtube_video_id?: string
+        }
+        Relationships: []
+      }
+      youtube_connections: {
+        Row: {
+          access_token: string
+          channel_id: string | null
+          channel_title: string | null
+          created_at: string
+          id: string
+          refresh_token: string
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          channel_id?: string | null
+          channel_title?: string | null
+          created_at?: string
+          id?: string
+          refresh_token: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          channel_id?: string | null
+          channel_title?: string | null
+          created_at?: string
+          id?: string
+          refresh_token?: string
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

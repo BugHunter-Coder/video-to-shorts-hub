@@ -5,16 +5,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Copy, Clock, Loader2, Play, Download } from "lucide-react";
+import { ArrowLeft, Copy, Clock, Loader2, Upload, Youtube } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 const Results = () => {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const [video, setVideo] = useState<Tables<"videos"> | null>(null);
   const [shorts, setShorts] = useState<Tables<"shorts">[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ytConnected, setYtConnected] = useState(false);
+  const [ytChannel, setYtChannel] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !id) { navigate("/auth"); return; }
@@ -28,39 +31,26 @@ const Results = () => {
       setShorts(shortsRes.data || []);
       setLoading(false);
     };
+
+    const checkYouTube = async () => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-upload?action=status`,
+          { headers: { Authorization: `Bearer ${session?.access_token}` } }
+        );
+        const data = await res.json();
+        setYtConnected(data.connected);
+        setYtChannel(data.channel?.channel_title || null);
+      } catch {}
+    };
+
     fetchData();
-  }, [user, id, navigate]);
+    checkYouTube();
+  }, [user, id, navigate, session]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "Copied!", description: "Copied to clipboard." });
-  };
-
-  const parseTimestamp = (ts: string): number => {
-    const parts = ts.split(":").map(Number);
-    if (parts.length === 2) return parts[0] * 60 + parts[1];
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    return 0;
-  };
-
-  const openClipOnYouTube = (startTs: string, endTs: string) => {
-    if (!video?.youtube_video_id) return;
-    const start = parseTimestamp(startTs);
-    const end = parseTimestamp(endTs);
-    window.open(
-      `https://www.youtube.com/embed/${video.youtube_video_id}?start=${start}&end=${end}&autoplay=1`,
-      "_blank"
-    );
-  };
-
-  const openClipDownloader = (startTs: string, endTs: string) => {
-    if (!video?.youtube_video_id) return;
-    const start = parseTimestamp(startTs);
-    const end = parseTimestamp(endTs);
-    window.open(
-      `https://www.y2mate.com/youtube/${video.youtube_video_id}`,
-      "_blank"
-    );
   };
 
   const copyAll = () => {
@@ -71,6 +61,58 @@ const Results = () => {
       )
       .join("\n\n---\n\n");
     copyToClipboard(text);
+  };
+
+  const connectYouTube = async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-upload?action=auth-url`,
+        { headers: { Authorization: `Bearer ${session?.access_token}` } }
+      );
+      const data = await res.json();
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+      } else {
+        toast({ title: "Error", description: data.error || "Failed to get auth URL", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to connect YouTube", variant: "destructive" });
+    }
+  };
+
+  const uploadToYouTube = async (short: Tables<"shorts">) => {
+    if (!video) return;
+    setUploading(short.id);
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-upload?action=upload`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            videoId: video.id,
+            shortTitle: short.title,
+            shortDescription: `${short.hook_line}\n\n${short.description}`,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: "Uploaded to YouTube!",
+          description: `Published as private. View at ${data.youtubeUrl}`,
+        });
+      } else {
+        throw new Error(data.error || "Upload failed");
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(null);
+    }
   };
 
   if (loading) {
@@ -99,15 +141,33 @@ const Results = () => {
 
       <main className="max-w-3xl mx-auto px-6 py-8">
         {/* Video header */}
-        <div className="flex items-start gap-4 mb-8">
-          {video.thumbnail_url && (
-            <img src={video.thumbnail_url} alt="" className="w-36 h-20 rounded-lg object-cover shrink-0" />
-          )}
-          <div>
+        <div className="flex items-start gap-4 mb-6">
+          <div className="flex-1">
             <h1 className="text-2xl font-bold mb-1">{video.title || "Video Analysis"}</h1>
-            <p className="text-sm text-muted-foreground">{video.youtube_url}</p>
           </div>
         </div>
+
+        {/* YouTube connection */}
+        <Card className="mb-6 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Youtube className="w-6 h-6 text-red-500" />
+              {ytConnected ? (
+                <div>
+                  <p className="font-medium text-sm">Connected to YouTube</p>
+                  {ytChannel && <p className="text-xs text-muted-foreground">{ytChannel}</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Connect YouTube to upload shorts directly</p>
+              )}
+            </div>
+            {!ytConnected && (
+              <Button size="sm" onClick={connectYouTube}>
+                <Youtube className="w-4 h-4 mr-1" /> Connect YouTube
+              </Button>
+            )}
+          </div>
+        </Card>
 
         {shorts.length === 0 ? (
           <Card className="p-8 text-center">
@@ -163,26 +223,34 @@ const Results = () => {
                       <p className="text-sm font-medium text-accent mb-0.5">Hook</p>
                       <p className="text-sm italic">"{s.hook_line}"</p>
                     </div>
-                     <div>
-                       <p className="text-sm font-medium text-muted-foreground mb-0.5">Why it works</p>
-                       <p className="text-sm">{s.description}</p>
-                     </div>
-                     <div className="flex items-center gap-2 pt-2 border-t border-border">
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         onClick={() => openClipOnYouTube(s.start_timestamp, s.end_timestamp)}
-                       >
-                         <Play className="w-4 h-4 mr-1" /> Watch Clip
-                       </Button>
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         onClick={() => openClipDownloader(s.start_timestamp, s.end_timestamp)}
-                       >
-                         <Download className="w-4 h-4 mr-1" /> Download
-                       </Button>
-                     </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-0.5">Why it works</p>
+                      <p className="text-sm">{s.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 pt-2 border-t border-border">
+                      {ytConnected && (
+                        <Button
+                          size="sm"
+                          onClick={() => uploadToYouTube(s)}
+                          disabled={uploading === s.id}
+                        >
+                          {uploading === s.id ? (
+                            <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Uploading…</>
+                          ) : (
+                            <><Upload className="w-4 h-4 mr-1" /> Upload to YouTube</>
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          copyToClipboard(`${s.title}\n${s.hook_line}\n${s.description}`)
+                        }
+                      >
+                        <Copy className="w-4 h-4 mr-1" /> Copy
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
