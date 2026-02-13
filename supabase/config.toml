@@ -2,3 +2,6 @@ project_id = "rqhjlynjfljpakekjxgr"
 
 [functions.analyze-video]
 verify_jwt = false
+
+[functions.youtube-upload]
+verify_jwt = false
