@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Copy, Clock, Loader2, Upload, Youtube } from "lucide-react";
+import { ArrowLeft, Copy, Clock, Download, Loader2, Upload, Youtube } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 const Results = () => {
@@ -53,14 +53,29 @@ const Results = () => {
     toast({ title: "Copied!", description: "Copied to clipboard." });
   };
 
-  const copyAll = () => {
-    const text = shorts
+  const formatAllShorts = () =>
+    shorts
       .map(
         (s) =>
           `#${s.short_number} — ${s.title}\nTimestamp: ${s.start_timestamp} – ${s.end_timestamp}\nHook: ${s.hook_line}\n${s.description}`
       )
       .join("\n\n---\n\n");
-    copyToClipboard(text);
+
+  const copyAll = () => {
+    copyToClipboard(formatAllShorts());
+  };
+
+  const downloadAsText = () => {
+    const header = `Shorts for: ${video?.title || "Video"}\n${"=".repeat(40)}\n\n`;
+    const content = header + formatAllShorts();
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(video?.title || "shorts").replace(/[^a-z0-9]/gi, "_")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Downloaded!", description: "Shorts saved as text file." });
   };
 
   const connectYouTube = async () => {
@@ -181,6 +196,9 @@ const Results = () => {
           <>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold">{shorts.length} Shorts Found</h2>
+              <Button variant="outline" size="sm" onClick={downloadAsText}>
+                <Download className="w-4 h-4 mr-1" /> Download
+              </Button>
               <Button variant="outline" size="sm" onClick={copyAll}>
                 <Copy className="w-4 h-4 mr-1" /> Copy All
               </Button>
