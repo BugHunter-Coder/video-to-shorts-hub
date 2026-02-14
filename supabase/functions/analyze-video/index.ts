@@ -23,7 +23,10 @@ serve(async (req) => {
     if (authError || !user) throw new Error("Unauthorized");
 
     const { videoId, title } = await req.json();
-    if (!videoId) throw new Error("Missing videoId");
+    if (!videoId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(videoId)) {
+      throw new Error("Invalid or missing videoId");
+    }
+    const sanitizedTitle = title ? String(title).slice(0, 500) : undefined;
 
     const { data: video } = await supabase
       .from("videos")
@@ -33,11 +36,11 @@ serve(async (req) => {
       .single();
     if (!video) throw new Error("Video not found");
 
-    const videoTitle = title || video.title || "Untitled video";
+    const videoTitle = sanitizedTitle || video.title || "Untitled video";
 
     // Update title if provided
-    if (title && title !== video.title) {
-      await supabase.from("videos").update({ title }).eq("id", videoId);
+    if (sanitizedTitle && sanitizedTitle !== video.title) {
+      await supabase.from("videos").update({ title: sanitizedTitle }).eq("id", videoId);
     }
 
     console.log("Analyzing video:", videoTitle);
