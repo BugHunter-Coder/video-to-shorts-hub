@@ -77,8 +77,13 @@ serve(async (req) => {
         channel_title: channel?.snippet?.title || null,
       }, { onConflict: "user_id" });
 
-      // Redirect back to dashboard
-      const appUrl = req.headers.get("origin") || "https://video-to-tiny-tales.lovable.app";
+      // Redirect back to dashboard (hardcoded to prevent open redirect)
+      const ALLOWED_ORIGINS = [
+        "https://video-to-tiny-tales.lovable.app",
+        "https://id-preview--4570892a-a692-4b09-b784-e35c1bdde123.lovable.app",
+      ];
+      const origin = req.headers.get("origin") || "";
+      const appUrl = ALLOWED_ORIGINS.includes(origin) ? origin : "https://video-to-tiny-tales.lovable.app";
       return new Response(`<html><script>window.location.href="${appUrl}/dashboard?yt=connected";</script></html>`, {
         headers: { "Content-Type": "text/html" },
       });
