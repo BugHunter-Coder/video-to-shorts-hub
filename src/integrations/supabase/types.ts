@@ -144,7 +144,36 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      youtube_connections_safe: {
+        Row: {
+          channel_id: string | null
+          channel_title: string | null
+          created_at: string | null
+          id: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          channel_id?: string | null
+          channel_title?: string | null
+          created_at?: string | null
+          id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          channel_id?: string | null
+          channel_title?: string | null
+          created_at?: string | null
+          id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
