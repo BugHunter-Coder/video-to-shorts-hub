@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Loader2, Upload, X } from "lucide-react";
 
 const ASPECT_RATIOS = [
@@ -23,6 +24,7 @@ const Analyze = () => {
   const [file, setFile] = useState<File | null>(null);
   const [aspectRatio, setAspectRatio] = useState("9:16");
   const [title, setTitle] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!user) { navigate("/auth"); return null; }
@@ -44,18 +46,43 @@ const Analyze = () => {
 
     setLoading(true);
 
-    // Upload file
+    // Upload file with progress tracking via XMLHttpRequest
+    setUploadProgress(0);
     const filePath = `${user.id}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from("user-videos")
-      .upload(filePath, file);
-    if (uploadError) {
-      toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
+
+    const fileUrl = await new Promise<string>((resolve, reject) => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const { data } = supabase.storage.from("user-videos").getPublicUrl(filePath);
+          resolve(data.publicUrl);
+        } else {
+          reject(new Error("Upload failed"));
+        }
+      });
+
+      xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+
+      xhr.open("POST", `${supabaseUrl}/storage/v1/object/user-videos/${filePath}`);
+      xhr.setRequestHeader("Authorization", `Bearer ${session?.access_token}`);
+      xhr.setRequestHeader("x-upsert", "true");
+      xhr.send(file);
+    }).catch((err) => {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
       setLoading(false);
-      return;
-    }
-    const { data: urlData } = supabase.storage.from("user-videos").getPublicUrl(filePath);
-    const fileUrl = urlData.publicUrl;
+      return null;
+    });
+
+    if (!fileUrl) return;
 
     // Create video record (no youtube URL needed for local files)
     const { data: video, error: insertError } = await supabase
@@ -188,7 +215,8 @@ const Analyze = () => {
               <Button type="submit" className="w-full" disabled={loading || !file}>
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing…
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {uploadProgress < 100 ? "Uploading…" : "Analyzing…"}
                   </>
                 ) : (
                   "Find 10 Shorts →"
@@ -196,9 +224,21 @@ const Analyze = () => {
               </Button>
             </form>
             {loading && (
-              <p className="text-sm text-muted-foreground text-center mt-4">
-                This may take 30–60 seconds. We're running AI analysis on your video.
-              </p>
+              <div className="mt-4 space-y-2">
+                {uploadProgress < 100 ? (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Uploading video…</span>
+                      <span className="font-mono font-medium">{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-2" />
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center">
+                    Upload complete. Running AI analysis — this may take 30–60 seconds.
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
