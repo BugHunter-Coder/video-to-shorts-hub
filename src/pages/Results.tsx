@@ -151,7 +151,7 @@ const Results = () => {
         <Card className="mb-6 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Youtube className="w-6 h-6 text-red-500" />
+              <Youtube className="w-6 h-6 text-destructive" />
               {ytConnected ? (
                 <div>
                   <p className="font-medium text-sm">Connected to YouTube</p>
