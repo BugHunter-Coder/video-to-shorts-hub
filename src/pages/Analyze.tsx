@@ -30,11 +30,6 @@ const Analyze = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (selected) {
-      const maxSize = 500 * 1024 * 1024;
-      if (selected.size > maxSize) {
-        toast({ title: "File too large", description: "Maximum file size is 500MB.", variant: "destructive" });
-        return;
-      }
       setFile(selected);
       if (!title) setTitle(selected.name.replace(/\.[^/.]+$/, ""));
     }
@@ -169,7 +164,7 @@ const Analyze = () => {
                   >
                     <div className="flex flex-col items-center gap-1">
                       <Upload className="w-6 h-6 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Click to upload video (max 500MB)</span>
+                      <span className="text-sm text-muted-foreground">Click to upload video</span>
                     </div>
                   </Button>
                 )}
